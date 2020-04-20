@@ -14,8 +14,11 @@ import (
 	"github.com/urfave/cli"
 	"os"
 )
-
-const usage = "tinydocker is a simple container runtime implementation for learning purpose."
+const (
+	rootUrl = "/root/"
+	mntUrl = "/root/mnt/"
+    usage = "tinydocker is a simple container runtime implementation for learning purpose."
+)
 
 var runCommand = cli.Command {
 	Name:                   "run",
@@ -72,18 +75,15 @@ func main() {
 	app := cli.NewApp()
 	app.Name  = "tinydocker"
 	app.Usage  =  usage
-
 	app.Commands = []cli.Command {
 		initCommand,
 		runCommand,
 	}
-
 	app.Before = func(context *cli.Context) error {
 		log.SetFormatter(&log.JSONFormatter{})
 		log.SetOutput(os.Stdout)
 		return nil
 	}
-
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
@@ -98,15 +98,15 @@ func Run(tty bool, comArray []string, res *subsystems.ResourceConfig) {
 	if err := parent.Start(); err != nil {
 		log.Error(err)
 	}
-
 	sendInitCommand(comArray, wp)
-
 	cgroupManager := cgroups.NewCgroupManager("tinydocker-cgroup")
 	defer cgroupManager.Destory()
 	cgroupManager.Set(res)
 	cgroupManager.Apply(parent.Process.Pid)
-
-	parent.Wait()
+	if tty {
+		parent.Wait()
+		container.DeleteWorkSpace(rootUrl, mntUrl)
+	}
 	os.Exit(-1)
 }
 

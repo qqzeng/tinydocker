@@ -14,19 +14,6 @@ const (
 	Usage = "tinydocker is a simple container runtime implementation for learning purpose."
 )
 
-var commitCommand = cli.Command {
-	Name:                   "commit",
-	Usage:                  "Commit current running container into a image",
-	Action: func(context *cli.Context) error {
-		if context.NArg() < 1 {
-			return fmt.Errorf("Missing container command")
-		}
-		imageName := context.Args().Get (0)
-		commitContainer(imageName)
-		return nil
-	},
-}
-
 var runCommand = cli.Command {
 	Name:                   "run",
 	Usage:                  "Create a container with namespace and cgroups limit tinydocker run -it [command]",
@@ -41,12 +28,17 @@ var runCommand = cli.Command {
 		cmdArray = cmdArray[0:]
 		tty := context.Bool("it")
 		volumeStr := context.String("v")
+		detached := context.Bool("d")
+		containerName := context.String("name")
 		res := &subsystems.ResourceConfig{
 			MemoryLimit: context.String("m"),
 			CpuSet:      context.String("cpuset"),
 			CpuShare:    context.String("cpushare"),
 		}
-		Run(tty, cmdArray, res, volumeStr)
+		if tty && detached {
+			return fmt.Errorf("option it and d can not be both provided")
+		}
+		Run(tty, cmdArray, res, volumeStr, containerName)
 		return nil
 	},
 	Flags: [] cli.Flag {
@@ -70,9 +62,18 @@ var runCommand = cli.Command {
 			Name:  "v",
 			Usage: "volume",
 		},
+		/* when testing detaching container, do not use `./tinydocker run -d top`,
+		use `./tinydocker run -d top -b [-n 10]` instead*/
+		cli.BoolFlag{
+			Name:  "d",
+			Usage: "detach container",
+		},
+		cli.StringFlag{
+			Name:  "name",
+			Usage: "container name",
+		},
 	},
 }
-
 
 var initCommand = cli.Command{
 	Name:                   "init",
@@ -84,3 +85,39 @@ var initCommand = cli.Command{
 	},
 }
 
+var commitCommand = cli.Command {
+	Name:                   "commit",
+	Usage:                  "Commit current running container into a image",
+	Action: func(context *cli.Context) error {
+		if context.NArg() < 1 {
+			return fmt.Errorf("missing container command")
+		}
+		imageName := context.Args().Get (0)
+		commitContainer(imageName)
+		return nil
+	},
+
+}
+
+/* TODO: `./tinydocker ps` does not update the status of container process.   */
+var listCommand = cli.Command{
+	Name:                   "ps",
+	Usage:                  "List all containers in any status",
+	Action: func(context *cli.Context) error {
+		ListContainers()
+		return nil
+	},
+}
+
+var logCommand = cli.Command{
+	Name:                   "logs",
+	Usage:                  "Print logs of a container",
+	Action: func(context *cli.Context) error {
+		if context.NArg() < 1 {
+			return fmt.Errorf("missing container command")
+		}
+		containerName := context.Args().Get (0)
+		LogContainer(containerName)
+		return nil
+	},
+}

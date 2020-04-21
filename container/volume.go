@@ -78,6 +78,13 @@ func PathExists(url string) (bool, error) {
 
 func CreateWriteLayer(rootUrl string) {
 	writeLayerUrl := rootUrl + "writeLayer/"
+	exist, _ := PathExists(writeLayerUrl)
+	if exist == true {
+		if err := os.RemoveAll(writeLayerUrl); err != nil {
+			log.Errorf("remove exists writeLayer %s error : %v", writeLayerUrl, err)
+			return
+		}
+	}
 	if err := os.Mkdir(writeLayerUrl, 0777); err != nil {
 		log.Errorf("fail to create directory %s : %v", writeLayerUrl, err)
 	}

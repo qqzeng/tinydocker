@@ -1,6 +1,7 @@
 package container
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"os"
 	"os/exec"
@@ -12,7 +13,26 @@ const (
 	MntUrl  = "/root/mnt/"
 )
 
-func NewParentProcess(tty bool, volumeStr string) (*exec.Cmd, *os.File) {
+type ContainerInfo struct {
+	Pid			string `json:"pid"` 			/* the init process pid in host machine. */
+	Id			string `json:"id"` 				/* the id of container. */
+	Name		string `json:"name"`			/* the name of container */
+	Command		string `json:"command"`			/* the executing command of init process in container */
+	CreateTime	string `json:"createTime"`		/* the create time of container */
+	Status		string `json:"status"`			/* the status  of container */
+}
+
+const (
+	RUNNING  			string = "running"
+	STOP  	 			string = "stopped"
+	EXIT  	 			string = "exited"
+	DefaultInfoLocation string = "/var/run/tinydocker/%s/"
+	ConfigName			string = "config.json"
+	NameLength			int    = 10
+	LogName				string = "container.log"
+)
+
+func NewParentProcess(tty bool, volumeStr string, containerName string) (*exec.Cmd, *os.File) {
 	rp, wp, err := NewPipe()
 	if err != nil {
 		log.Errorf("New pipe error %v", err)
@@ -26,7 +46,17 @@ func NewParentProcess(tty bool, volumeStr string) (*exec.Cmd, *os.File) {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else {
+		/* redirect ouput of init process to a tempoary file. */
+		err, clf := createContainerLogFile(containerName)
+		if err != nil {
+			log.Errorf("Create container log file error : %v", err)
+			// ...
+		}
+		cmd.Stdout = clf
+		cmd.Stderr = clf
 	}
+
 	cmd.ExtraFiles = []*os.File{rp}
 	NewWorkSpace(RootUrl, MntUrl, volumeStr)
 	cmd.Dir = MntUrl
@@ -39,4 +69,17 @@ func NewPipe() (*os.File, *os.File, error) {
 	} else {
 		return rp, wp, nil
 	}
+}
+
+func createContainerLogFile(containerName string) (error, *os.File) {
+	containerLogDir := fmt.Sprintf(DefaultInfoLocation, containerName)
+	if err := os.MkdirAll(containerLogDir, 0622); err != nil {
+		return fmt.Errorf("create log directory for container %s error : %v", containerName, err), nil
+	}
+	containerLogFile := containerLogDir + LogName
+	clf, err := os.Create(containerLogFile)
+	if err != nil {
+		return fmt.Errorf("create log file for container %s error : %v", containerName, err), nil
+	}
+	return nil, clf
 }

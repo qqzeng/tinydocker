@@ -14,6 +14,7 @@ import (
 
 func RunContainerInitProcess() error {
 	cmdArray := readUserCommand()
+	log.Infof("Init process executing command %s", strings.Join(cmdArray, " "))
 	if cmdArray == nil || len(cmdArray) == 0 {
 		return fmt.Errorf("run container get user command error, cmdArray is nil")
 	}

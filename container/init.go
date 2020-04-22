@@ -7,12 +7,14 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 )
 
-func RunContainerInitProcess() error {
+func RunContainerInitProcess(containerName string) error {
 	cmdArray := readUserCommand()
 	log.Infof("Init process executing command %s", strings.Join(cmdArray, " "))
 	if cmdArray == nil || len(cmdArray) == 0 {
@@ -24,11 +26,41 @@ func RunContainerInitProcess() error {
 		log.Errorf("Exec loop path error %v", err)
 		return err
 	}
+	hokOfProcessExit(containerName)
 	log.Infof("Find path %s", path)
 	if err := syscall.Exec(path, cmdArray[0:], os.Environ()); err != nil {
 		logrus.Errorf(err.Error())
 	}
 	return nil
+}
+
+func hokOfProcessExit(containerName string) {
+	var stopLock sync.Mutex
+	stop := false
+	signalChan := make(chan os.Signal, 1)
+		go func() {
+			log.Info("Waiting for container process exit..")
+			<-signalChan
+			stopLock.Lock()
+			stop = true
+			stopLock.Unlock()
+			log.Info("Cleaning before stop...")
+			deleteContainerInfo(containerName)
+			os.Exit(0)
+	}()
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+}
+
+func deleteContainerInfo(containerName string) {
+	containerSavedUrl := fmt.Sprintf(DefaultInfoLocation, containerName)
+	exists, _ := PathExists(containerSavedUrl)
+	if !exists {
+		log.Errorf("Container %s not found, abort delete operation", containerName)
+		return
+	}
+	if err := os.RemoveAll(containerSavedUrl); err != nil {
+		log.Errorf("Remove container information error: %v", err)
+	}
 }
 
 func readUserCommand() []string {

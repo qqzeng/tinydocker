@@ -8,9 +8,10 @@ import (
 	"syscall"
 )
 
-const (
-	RootUrl = "/root/"
-	MntUrl  = "/root/mnt/"
+var (
+	RootUrl = "/root"
+	MntUrl  = "/root/mnt/%s"
+	WriteLayer = "/root/writeLayer/%s"
 )
 
 type ContainerInfo struct {
@@ -19,7 +20,8 @@ type ContainerInfo struct {
 	Name		string `json:"name"`			/* the name of container */
 	Command		string `json:"command"`			/* the executing command of init process in container */
 	CreateTime	string `json:"createTime"`		/* the create time of container */
-	Status		string `json:"status"`			/* the status  of container */
+	Status		string `json:"status"`			/* the status of container */
+	Volume 		string `json:"volume"`			/* the mounted volume of container */
 }
 
 const (
@@ -32,13 +34,14 @@ const (
 	LogName				string = "container.log"
 )
 
-func NewParentProcess(tty bool, volumeStr string, containerName string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volumeStr string, containerName string, imageName string,
+	envSlice []string) (*exec.Cmd, *os.File) {
 	rp, wp, err := NewPipe()
 	if err != nil {
 		log.Errorf("New pipe error %v", err)
 		return nil, nil
 	}
-	cmd := exec.Command("/proc/self/exe", "init")
+	cmd := exec.Command("/proc/self/exe", "init", containerName)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS | syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC,
 	}
@@ -47,7 +50,7 @@ func NewParentProcess(tty bool, volumeStr string, containerName string) (*exec.C
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	} else {
-		/* redirect ouput of init process to a tempoary file. */
+		/* redirect ouput of init process to a temporary file. */
 		err, clf := createContainerLogFile(containerName)
 		if err != nil {
 			log.Errorf("Create container log file error : %v", err)
@@ -58,8 +61,9 @@ func NewParentProcess(tty bool, volumeStr string, containerName string) (*exec.C
 	}
 
 	cmd.ExtraFiles = []*os.File{rp}
-	NewWorkSpace(RootUrl, MntUrl, volumeStr)
-	cmd.Dir = MntUrl
+	cmd.Env = append(os.Environ(), envSlice...)
+	cmd.Dir = fmt.Sprintf(MntUrl, containerName)
+	NewWorkSpace(volumeStr, imageName, containerName)
 	return cmd, wp
 }
 

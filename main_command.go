@@ -6,12 +6,15 @@ import (
 	"github.com/qqzeng/tinydocker/cgroups/subsystems"
 	"github.com/qqzeng/tinydocker/container"
 	log "github.com/Sirupsen/logrus"
+	"os"
 )
 
 const (
 	RootUrl = "/root/"
 	MntUrl = "/root/mnt/"
 	Usage = "tinydocker is a simple container runtime implementation for learning purpose."
+	ENV_EXEC_PID = "tinydocker_pid"
+	ENV_EXEC_COMMAND = "tinydocker_command"
 )
 
 var runCommand = cli.Command {
@@ -25,20 +28,23 @@ var runCommand = cli.Command {
 		for _, arg := range context.Args() {
 			cmdArray = append(cmdArray, arg)
 		}
-		cmdArray = cmdArray[0:]
+		// ./mydocker  run  -d  --name  containerl  -v  /root/froml:/tol  busybox  top
+		imageName := cmdArray[0]
+		cmdArray = cmdArray[1:]
 		tty := context.Bool("it")
 		volumeStr := context.String("v")
 		detached := context.Bool("d")
 		containerName := context.String("name")
+		envSlice := context.StringSlice("e")
 		res := &subsystems.ResourceConfig{
 			MemoryLimit: context.String("m"),
 			CpuSet:      context.String("cpuset"),
 			CpuShare:    context.String("cpushare"),
 		}
-		if tty && detached {
-			return fmt.Errorf("option it and d can not be both provided")
+		if tty == detached {
+			return fmt.Errorf("option it and d can not be identical")
 		}
-		Run(tty, cmdArray, res, volumeStr, containerName)
+		Run(tty, cmdArray, res, volumeStr, containerName, imageName, envSlice)
 		return nil
 	},
 	Flags: [] cli.Flag {
@@ -72,6 +78,10 @@ var runCommand = cli.Command {
 			Name:  "name",
 			Usage: "container name",
 		},
+		cli.StringSliceFlag{
+			Name:  "e",
+			Usage: "set environment variables",
+		},
 	},
 }
 
@@ -80,7 +90,11 @@ var initCommand = cli.Command{
 	Usage:                  "Init container process run user’s process in container.  Do not call it outside",
 	Action: func(context *cli.Context) error {
 		log.Info("init comes on")
-		err := container.RunContainerInitProcess()
+		if context.NArg() < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args().Get (0)
+		err := container.RunContainerInitProcess(containerName)
 		return err
 	},
 }
@@ -89,17 +103,17 @@ var commitCommand = cli.Command {
 	Name:                   "commit",
 	Usage:                  "Commit current running container into a image",
 	Action: func(context *cli.Context) error {
-		if context.NArg() < 1 {
-			return fmt.Errorf("missing container command")
+		if context.NArg() < 2 {
+			return fmt.Errorf("missing container name and image name")
 		}
-		imageName := context.Args().Get (0)
-		commitContainer(imageName)
+		containerName := context.Args().Get (0)
+		imageName := context.Args().Get (1)
+		commitContainer(containerName, imageName)
 		return nil
 	},
 
 }
 
-/* TODO: `./tinydocker ps` does not update the status of container process.   */
 var listCommand = cli.Command{
 	Name:                   "ps",
 	Usage:                  "List all containers in any status",
@@ -116,8 +130,55 @@ var logCommand = cli.Command{
 		if context.NArg() < 1 {
 			return fmt.Errorf("missing container command")
 		}
-		containerName := context.Args().Get (0)
+		containerName := context.Args().Get(0)
 		LogContainer(containerName)
+		return nil
+	},
+}
+
+var execCommand = cli.Command{
+	Name:                   "exec",
+	Usage:                  "Execute a command in given container",
+	Action: func(context *cli.Context) error {
+		if os.Getenv(ENV_EXEC_PID) != "" {
+			log.Infof("pid callback %v", os.Getgid())
+			return nil
+		}
+		if context.NArg() < 2 {
+			return fmt.Errorf("missing container name or command")
+		}
+		containerName := context.Args().Get (0)
+		var comArray []string
+		for _, arg := range context.Args().Tail() {
+			comArray = append(comArray, arg)
+		}
+		ExecContainer(containerName, comArray)
+		return nil
+	},
+}
+
+var stopCommand = cli.Command{
+	Name:                   "stop",
+	Usage:                  "Stop a running container process",
+	Action: func(context *cli.Context) error {
+		if context.NArg() < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args().Get (0)
+		StopContainer(containerName)
+		return nil
+	},
+}
+
+var removeCommand = cli.Command{
+	Name:                   "rm",
+	Usage:                  "Remove a unused container",
+	Action: func(context *cli.Context) error {
+		if context.NArg() < 1 {
+			return fmt.Errorf("missing container name")
+		}
+		containerName := context.Args().Get (0)
+		RemoveContainer(containerName)
 		return nil
 	},
 }

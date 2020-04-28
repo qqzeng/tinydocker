@@ -66,6 +66,7 @@ func (bnd *BridgeNetworkDriver) Connect(network *Network, endpoint *Endpoint) er
 	if err := netlink.LinkSetUp(&endpoint.Device); err != nil {
 		return fmt.Errorf("fail start up endpoint interface : %v", err)
 	}
+
 	return nil
 }
 
@@ -106,6 +107,13 @@ func createBridgeInterface(bridgeName string) error {
 	br := &netlink.Bridge{LinkAttrs: la}
 	if err := netlink.LinkAdd(br); err != nil {
 		return fmt.Errorf("fail to create bridge %s : %v", bridgeName, err)
+	}
+
+	/* associate host eth and bridge */
+	hostEthName := "eth0"
+	hostEth, _ := netlink.LinkByName(hostEthName)
+	if err := netlink.LinkSetMaster(hostEth, br); err != nil {
+		return fmt.Errorf("fail to associate host eth %s and bridge: %v", hostEthName, err)
 	}
 	return nil
 }

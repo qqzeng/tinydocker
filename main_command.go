@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	RootUrl = "/root/"
-	MntUrl = "/root/mnt/"
 	Usage = "tinydocker is a simple container runtime implementation for learning purpose."
 	ENV_EXEC_PID = "tinydocker_pid"
 	ENV_EXEC_COMMAND = "tinydocker_command"

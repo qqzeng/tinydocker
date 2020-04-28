@@ -5,6 +5,7 @@ import (
 	"github.com/urfave/cli"
 	"github.com/qqzeng/tinydocker/cgroups/subsystems"
 	"github.com/qqzeng/tinydocker/container"
+	"github.com/qqzeng/tinydocker/network"
 	log "github.com/Sirupsen/logrus"
 	"os"
 )
@@ -28,7 +29,7 @@ var runCommand = cli.Command {
 		for _, arg := range context.Args() {
 			cmdArray = append(cmdArray, arg)
 		}
-		// ./mydocker  run  -d  --name  containerl  -v  /root/froml:/tol  busybox  top
+		// ./tinydocker  run  -d  --name  containerl  -v  /root/froml:/tol  busybox  top
 		imageName := cmdArray[0]
 		cmdArray = cmdArray[1:]
 		tty := context.Bool("it")
@@ -36,6 +37,8 @@ var runCommand = cli.Command {
 		detached := context.Bool("d")
 		containerName := context.String("name")
 		envSlice := context.StringSlice("e")
+		network := context.String("net")
+		portmapping := context.StringSlice("p")
 		res := &subsystems.ResourceConfig{
 			MemoryLimit: context.String("m"),
 			CpuSet:      context.String("cpuset"),
@@ -44,7 +47,7 @@ var runCommand = cli.Command {
 		if tty == detached {
 			return fmt.Errorf("option it and d can not be identical")
 		}
-		Run(tty, cmdArray, res, volumeStr, containerName, imageName, envSlice)
+		Run(tty, cmdArray, res, volumeStr, containerName, imageName, envSlice, network, portmapping)
 		return nil
 	},
 	Flags: [] cli.Flag {
@@ -81,6 +84,14 @@ var runCommand = cli.Command {
 		cli.StringSliceFlag{
 			Name:  "e",
 			Usage: "set environment variables",
+		},
+		cli.StringFlag{
+			Name:  "net",
+			Usage: "container network",
+		},
+		cli.StringSliceFlag{
+			Name: "p",
+			Usage: "port mapping",
 		},
 	},
 }
@@ -180,5 +191,59 @@ var removeCommand = cli.Command{
 		containerName := context.Args().Get (0)
 		RemoveContainer(containerName)
 		return nil
+	},
+}
+
+var networkCommand = cli.Command{
+	Name:  "network",
+	Usage: "Container network commands",
+	Subcommands: []cli.Command {
+		{
+			Name: "create",
+			Usage: "Create a container network",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:  "driver",
+					Usage: "network driver",
+				},
+				cli.StringFlag{
+					Name:  "subnet",
+					Usage: "subnet cidr",
+				},
+			},
+			Action:func(context *cli.Context) error {
+				if context.NArg() < 1 {
+					return fmt.Errorf("missing network name")
+				}
+				network.Init()
+				driver := context.String("driver")
+				subnet := context.String("subnet")
+				name := context.Args().Get (0)
+				err := network.CreateNetwork(driver, subnet, name)
+				return err
+			},
+		},
+		{
+			Name: "list",
+			Usage: "Display container network list",
+			Action:func(context *cli.Context) error {
+				network.Init()
+				network.ListNetwork()
+				return nil
+			},
+		},
+		{
+			Name: "remove",
+			Usage: "Remove a container network",
+			Action:func(context *cli.Context) error {
+				if context.NArg() < 1 {
+					return fmt.Errorf("missing network name")
+				}
+				network.Init()
+				name := context.Args().Get (0)
+				err := network.DeleteNetwork(name)
+				return err
+			},
+		},
 	},
 }

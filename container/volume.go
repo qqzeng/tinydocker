@@ -94,15 +94,9 @@ func CreateWriteLayer(containerName string) {
 
 func CreateMountPoint(containerName string, imageName string) {
 	mntUrl := fmt.Sprintf(MntUrl, containerName)
-	exist, err := PathExists(mntUrl)
-	if err != nil {
-		log.Errorf("Error %v", err)
+	if err := os.MkdirAll(mntUrl, 0777); err != nil {
+		log.Errorf("fail to create directory %s : %v", mntUrl, err)
 		return
-	}
-	if exist == false {
-		if err := os.MkdirAll(mntUrl, 0777); err != nil {
-			log.Errorf("fail to create directory %s : %v", mntUrl, err)
-		}
 	}
 	tmpWriteLayer := fmt.Sprintf(WriteLayer, containerName)
 	tmpImageUrl := RootUrl + "/" + imageName

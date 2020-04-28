@@ -22,6 +22,7 @@ type ContainerInfo struct {
 	CreateTime	string `json:"createTime"`		/* the create time of container */
 	Status		string `json:"status"`			/* the status of container */
 	Volume 		string `json:"volume"`			/* the mounted volume of container */
+	PortMapping []string `json:"portmapping"`	/* the port mapping of container */
 }
 
 const (

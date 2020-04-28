@@ -7,6 +7,7 @@ import (
 	"github.com/qqzeng/tinydocker/cgroups"
 	"github.com/qqzeng/tinydocker/cgroups/subsystems"
 	"github.com/qqzeng/tinydocker/container"
+	"github.com/qqzeng/tinydocker/network"
 	"math/rand"
 	"os"
 	"strconv"
@@ -15,7 +16,11 @@ import (
 )
 
 func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volumeStr string,
-	containerName string, imageName string, envSlice []string) {
+	containerName string, imageName string, envSlice []string, nw string, portmapping []string) {
+	id := randStringBytes(container.NameLength)
+	if containerName == "" {
+		containerName = id
+	}
 	parent, wp := container.NewParentProcess(tty, volumeStr, containerName, imageName, envSlice)
 	if parent == nil {
 		log.Error("new parent process error")
@@ -24,18 +29,34 @@ func Run(tty bool, comArray []string, res *subsystems.ResourceConfig, volumeStr 
 	if err := parent.Start(); err != nil {
 		log.Error(err)
 	}
-
 	/* record container information */
-	cName, err := recordContainerInfo(parent.Process.Pid, comArray, containerName)
+	cName, err := recordContainerInfo(parent.Process.Pid, comArray, containerName, id, volumeStr)
 	if err != nil {
 		log.Errorf("Record container information error: %v", err)
 	}
 
-	sendInitCommand(comArray, wp)
 	cgroupManager := cgroups.NewCgroupManager("tinydocker-cgroup")
 	defer cgroupManager.Destory()
 	cgroupManager.Set(res)
 	cgroupManager.Apply(parent.Process.Pid)
+
+	/* setup network information */
+	if nw != "" {
+		network.Init()
+		cInfo := &container.ContainerInfo{
+			Id:          id,
+			Pid:         strconv.Itoa(parent.Process.Pid),
+			Name:        containerName,
+			PortMapping: portmapping,
+		}
+		if err := network.Connect(nw, cInfo); err != nil {
+			log.Errorf("Fail to connect network : %v", err)
+			return
+		}
+	}
+
+	sendInitCommand(comArray, wp)
+
 	if tty {
 		parent.Wait()
 		/* TODO: need to delete container information for detached container process. */
@@ -64,14 +85,11 @@ func randStringBytes(n int) string {
 	return string(b)
 }
 
-func recordContainerInfo(containerPid int, comArray []string, containerName string) (string, error) {
+func recordContainerInfo(containerPid int, comArray []string, containerName string,
+	id string, volumeStr string) (string, error) {
 	/* construct container struct. */
 	createTime := time.Now().Format("2006-01-02 15:04:05")
 	command := strings.Join(comArray, " ")
-	id := randStringBytes(container.NameLength)
-	if containerName == "" {
-		containerName = id
-	}
 	containerInfo := &container.ContainerInfo{
 		Pid:        strconv.Itoa(containerPid),
 		Id:         id,
@@ -79,6 +97,7 @@ func recordContainerInfo(containerPid int, comArray []string, containerName stri
 		Command:    command,
 		CreateTime: createTime,
 		Status:     container.RUNNING,
+		Volume:     volumeStr,
 	}
 	containerBytes, err := json.Marshal(containerInfo)
 	if err != nil {

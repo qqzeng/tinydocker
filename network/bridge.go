@@ -150,7 +150,7 @@ func setInterfaceUp(bridgeName string) error {
 }
 
 func SetIptables(bridgeName string, subnet *net.IPNet) error {
-	iptablesCmd := fmt.Sprintf("-t nat -A POSTROUTING -s %s ! -o %s -j MASQUERADE", subnet.String(), bridgeName)
+	iptablesCmd := fmt.Sprintf("-t nat -A POSTROUTING -s %s -o %s -j MASQUERADE", subnet.String(), "enp0s3")
 	cmd := exec.Command("iptables", strings.Split(iptablesCmd, " ")...)
 	output, err := cmd.Output()
 	if err != nil {

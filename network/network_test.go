@@ -248,3 +248,24 @@ func SetInterfaceUp(interfaceName string) error {
 	}
 	return nil
 }
+
+func TestNet007(t *testing.T) {
+	deleteDevice("testbridge")
+	deleteDevice("12345")
+}
+
+func deleteDevice(name string)  {
+	l, err := netlink.LinkByName(name)
+	if err != nil {
+		fmt.Errorf("Getting link with name %s failed: %v", name, err)
+		return
+	}
+
+	// i.e, ifconfig testbridge down && ip link delete testbridge type bridge
+	// i.e, ip link delete 12345 type veth
+	if err := netlink.LinkDel(l); err != nil {
+		fmt.Errorf("Failed to remove bridge interface %s delete: %v", name, err)
+		return
+	}
+	log.Printf("Delete Device %s\n", name)
+}
